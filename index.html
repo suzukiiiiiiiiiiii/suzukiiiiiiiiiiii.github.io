@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>抽選ルーレット</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+    background:#f5f6f8;color:#333;min-height:100vh;
+  }
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    max-width:1000px;margin:0 auto;padding:20px 24px 8px;
+  }
+  header h1{font-size:18px;font-weight:700}
+  #soundBtn{
+    background:#fff;border:1px solid #d0d5db;border-radius:6px;
+    padding:5px 10px;font-size:14px;cursor:pointer;color:#555;
+  }
+  #soundBtn:hover{background:#f0f1f3}
+
+  main{
+    display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;
+    max-width:1000px;margin:0 auto;padding:12px 24px 40px;align-items:start;
+  }
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+
+  /* ルーレット */
+  .stage{padding:12px 0}
+  .wheel-wrap{position:relative;width:min(440px,100%);aspect-ratio:1;margin:0 auto}
+  #wheel{position:absolute;inset:0;width:100%;height:100%}
+  .pointer{
+    position:absolute;top:-6px;left:50%;transform:translateX(-50%);transform-origin:50% 100%;
+    width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;
+    border-top:26px solid:#555;z-index:2;
+  }
+  .pointer.tick{animation:tick .09s}
+  @keyframes tick{40%{transform:translateX(-50%) rotate(-8deg)}}
+  #hub{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:26%;aspect-ratio:1;border-radius:50%;
+    background:#fff;border:1px solid #c8cdd4;cursor:pointer;z-index:1;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-family:inherit;color:#333;transition:background .15s;
+  }
+  #hub:hover:not(:disabled){background:#f0f1f3}
+  #hub:disabled{cursor:default;color:#aaa}
+  #hubText{font-size:22px;font-weight:700;line-height:1}
+  #hubSmall{font-size:10px;color:#888}
+  #hub.win #hubSmall{display:none}
+  #hub.win #hubText{font-size:32px}
+
+  .status{
+    display:flex;gap:16px;justify-content:center;flex-wrap:wrap;
+    margin-top:18px;font-size:13px;color:#666;
+  }
+  .status b{font-size:16px;color:#333;margin-left:4px}
+
+  /* パネル */
+  .panel{display:flex;flex-direction:column;gap:16px}
+  .card{background:#fff;border:1px solid #e2e5e9;border-radius:8px;padding:16px}
+  .card h2{font-size:14px;font-weight:700;margin-bottom:12px;color:#444}
+  .hint{margin-top:8px;font-size:11.5px;color:#999;line-height:1.6}
+
+  .range-row{display:flex;gap:8px;align-items:center}
+  input[type=number],input[type=text]{
+    border:1px solid #c8cdd4;border-radius:6px;padding:7px 10px;
+    font-size:14px;font-family:inherit;width:100%;min-width:0;background:#fff;
+  }
+  input[type=number]{width:80px;flex:none}
+  input:focus{outline:none;border-color:#8a94a0}
+
+  .btn{
+    font-size:13px;font-weight:700;padding:8px 14px;border-radius:6px;cursor:pointer;
+    border:1px solid #4a5560;background:#4a5560;color:#fff;font-family:inherit;transition:background .15s;flex:none;
+  }
+  .btn:hover:not(:disabled){background:#39434d}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.sub{background:#fff;color:#444;border-color:#c8cdd4}
+  .btn.sub:hover:not(:disabled){background:#f0f1f3}
+  .btn.small{padding:6px 11px;font-size:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;min-height:30px;margin-top:10px;align-content:flex-start}
+  .chips.history{max-height:160px;overflow:auto}
+  .empty{font-size:12px;color:#aaa;align-self:center}
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;font-size:14px;
+    padding:3px 9px;border-radius:5px;border:1px solid;cursor:pointer;background:#fff;transition:background .15s;
+  }
+  .chip.exc{border-color:#d8b4b4;color:#a05252}
+  .chip.exc:hover{background:#faf0f0}
+  .chip.exc .x{font-size:11px;color:#c99}
+  .chip.out{opacity:.45;text-decoration:line-through}
+  .chip.hist{border-color:#c8cdd4;color:#444;cursor:default}
+  .chip.hist i{font-style:normal;font-size:10px;color:#aaa;margin-right:2px}
+
+  .finished{
+    position:absolute;inset:0;z-index:3;border-radius:50%;
+    display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
+    background:rgba(245,246,248,.92);text-align:center;
+  }
+  .finished p{font-size:15px;font-weight:700;color:#555}
+  .hidden{display:none!important}
+
+  #toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:#333;color:#fff;font-size:13px;padding:8px 18px;border-radius:6px;
+    opacity:0;pointer-events:none;transition:opacity .25s;z-index:50;
+  }
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>抽選ルーレット</h1>
+  <button id="soundBtn" title="目盛り音の切替">音:入</button>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="wheel-wrap" id="wheelWrap">
+      <div class="pointer" id="pointer"></div>
+      <canvas id="wheel"></canvas>
+      <button id="hub">
+        <span id="hubText">SPIN</span>
+        <small id="hubSmall">抽選する</small>
+      </button>
+      <div class="finished hidden" id="finished">
+        <p id="finTitle">すべての番号を抽選しました</p>
+        <button class="btn small" id="finBtn">はじめから</button>
+      </div>
+    </div>
+    <div class="status">
+      <span>残り<b id="remain">0</b></span>
+      <span>対象<b id="total">0</b></span>
+      <span>抽選済み<b id="doneCount">0</b></span>
+      <span>欠番・欠課<b id="excCount">0</b></span>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <h2>番号レンジ</h2>
+      <div class="range-row">
+        <input type="number" id="minN" value="1"><span>〜</span>
+        <input type="number" id="maxN" value="30">
+        <button class="btn" id="applyRange">適用</button>
+      </div>
+      <p class="hint">適用すると履歴はリセットされます。</p>
+    </div>
+
+    <div class="card">
+      <h2>欠番・欠課(最初から除外)</h2>
+      <div class="range-row">
+        <input type="text" id="excInput" placeholder="例: 3,7 / 1-5">
+        <button class="btn" id="addExc">追加</button>
+      </div>
+      <div class="chips" id="excChips"></div>
+      <div class="row">
+        <button class="btn sub small" id="clearExc">欠番をクリア</button>
+      </div>
+      <p class="hint">「3,7」で複数、「1-5」で連続指定。数字を押すと除外解除。</p>
+    </div>
+
+    <div class="card">
+      <h2>抽選履歴</h2>
+      <div class="chips history" id="history"></div>
+      <div class="row">
+        <button class="btn sub small" id="undo">ひとつ戻す</button>
+        <button class="btn sub small" id="reset">履歴リセット</button>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="toast"></div>
+
+<script>
+(()=>{
+/* ============================================================
+   ★いんちき設定:ここを編集する
+------------------------------------------------------------
+  never … 絶対にあたらない番号。
+          ホイールには普通に表示されますが、絶対に止まりません。
+          ただし残りがすべてneverになった場合は制限が解除され、
+          その中から必ず当たります。
+          例: never: [4, 13],
+
+  hard  … 当てにくくする番号と「出やすさ」。
+          1 = 通常 / 0.3 = 3割の出やすさ / 0.1 = 1割。
+          0 にすると実質あたりません。
+          例: hard: {7: 0.3, 12: 0.5},
+============================================================ */
+const SETTINGS = {
+  never: [],   // 例: [4, 13]
+  hard: {},    // 例: {7: 0.3, 12: 0.5}
+};
+/* ============================================================ */
+
+const TAU=Math.PI*2, mod=(a,b)=>((a%b)+b)%b, $=id=>document.getElementById(id);
+const canvas=$('wheel'), ctx=canvas.getContext('2d');
+const hub=$('hub'), hubText=$('hubText'), pointerEl=$('pointer');
+const state={min:1,max:30,excluded:new Set(),drawn:[],rotation:-Math.PI/2,spinning:false,pending:false,sound:true};
+let pool=[], dpr=1, S=0;
+
+function computePool(){
+  pool=[];
+  for(let n=state.min;n<=state.max;n++)
+    if(!state.excluded.has(n)&&!state.drawn.includes(n)) pool.push(n);
+}
+function targetTotal(){let t=0;for(let n=state.min;n<=state.max;n++)if(!state.excluded.has(n))t++;return t;}
+
+function sizeCanvas(){
+  const s=$('wheelWrap').clientWidth;
+  dpr=Math.min(2,window.devicePixelRatio||1); S=s;
+  canvas.width=Math.round(s*dpr);canvas.height=Math.round(s*dpr);
+  drawWheel();
+}
+window.addEventListener('resize',sizeCanvas);
+
+/* ---- 描画 ---- */
+function drawWheel(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,S,S);
+  const cx=S/2, cy=S/2, R=S/2-2;
+  ctx.beginPath();ctx.arc(cx,cy,R,0,TAU);
+  ctx.fillStyle='#fff';ctx.fill();
+  ctx.lineWidth=1.5;ctx.strokeStyle='#c8cdd4';ctx.stroke();
+
+  const n=pool.length;
+  if(n>0){
+    const seg=TAU/n;
+    for(let i=0;i<n;i++){
+      const a0=state.rotation+i*seg, a1=a0+seg;
+      if(i%2){
+        ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R-1,a0,a1);ctx.closePath();
+        ctx.fillStyle='#eef1f4';ctx.fill();
+      }
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R-1,a0,a1);ctx.closePath();
+      ctx.lineWidth=1;ctx.strokeStyle='#d8dce1';ctx.stroke();
+      const mid=a0+seg/2, digits=String(pool[i]).length;
+      ctx.save();
+      ctx.translate(cx,cy);ctx.rotate(mid);ctx.translate(R*0.82,0);ctx.rotate(Math.PI/2);
+      let fs=Math.min(S*0.06,(seg*R*0.82)*0.72/(0.6*digits));
+      fs=Math.max(fs,S*0.022);
+      ctx.font=fs+'px sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#444';
+      ctx.fillText(pool[i],0,0);ctx.restore();
+    }
+  }
+}
+
+/* ---- 目盛り音 ---- */
+let actx=null,lastTickAt=0;
+function ac(){try{if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();}catch(e){}return actx;}
+function tickSound(now){
+  if(!state.sound)return;const a=ac();if(!a||now-lastTickAt<28)return;lastTickAt=now;
+  const t=a.currentTime,o=a.createOscillator(),g=a.createGain();
+  o.type='square';o.frequency.value=1100;
+  g.gain.setValueAtTime(0.045,t);g.gain.exponentialRampToValueAtTime(0.0005,t+0.04);
+  o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+0.05);
+}
+function pointerFlick(){pointerEl.classList.remove('tick');void pointerEl.offsetWidth;pointerEl.classList.add('tick');}
+
+/* ---- あたり番号の選択(重み付き) ---- */
+function pickWinner(){
+  if(pool.length===0)return null;
+  // never は候補から外す。ただし残りが全部neverなら制限解除して必ず当てる
+  let candidates=pool.filter(n=>!SETTINGS.never.includes(n));
+  if(candidates.length===0)candidates=[...pool];
+  // hard の重み(未指定は1、負値は0扱い)
+  const weights=candidates.map(n=>Math.max(0,(SETTINGS.hard[n]!==undefined?SETTINGS.hard[n]:1)));
+  let totalW=weights.reduce((a,b)=>a+b,0);
+  if(totalW<=0){weights.fill(1);totalW=candidates.length;} // 全部0なら均等にする
+  let r=Math.random()*totalW;
+  for(let i=0;i<candidates.length;i++){
+    r-=weights[i];
+    if(r<=0)return candidates[i];
+  }
+  return candidates[candidates.length-1];
+}
+
+/* ---- 抽選 ---- */
+function pointerIndex(rot){return Math.floor(mod(-Math.PI/2-rot,TAU)/(TAU/pool.length));}
+
+function spin(){
+  if(state.spinning||state.pending)return;   // pending中は回せない(連続抽選のズレ防止)
+  if(pool.length===0){toast('抽選できる番号がありません');return;}
+  const winner=pickWinner();
+  if(winner===null){toast('抽選できる番号がありません');return;}
+  ac();
+  state.spinning=true;hub.disabled=true;
+  hub.classList.remove('win');hubText.textContent='';
+  $('finished').classList.add('hidden');
+  const n=pool.length, seg=TAU/n;
+  const idx=pool.indexOf(winner);
+  const f=0.18+Math.random()*0.64;
+  const target=mod(-Math.PI/2-(idx*seg+f*seg),TAU);
+  const delta=mod(target-mod(state.rotation,TAU),TAU);
+  const start=state.rotation, total=delta+(5+Math.floor(Math.random()*3))*TAU;
+  const dur=3800+Math.random()*900, t0=performance.now();
+  let lastI=pointerIndex(start);
+  (function frame(t){
+    const p=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-p,4);
+    state.rotation=start+total*e;
+    drawWheel();
+    if(n>1){const ci=pointerIndex(state.rotation);if(ci!==lastI){tickSound(t);pointerFlick();lastI=ci;}}
+    if(p<1)requestAnimationFrame(frame);else finish(winner);
+  })(t0);
+}
+
+function finish(winner){
+  state.spinning=false;
+  state.pending=true;                 // 番号が消えるまで次の抽選をロック
+  state.drawn.push(winner);
+  hubText.textContent=winner;hub.classList.add('win');
+  updateStatus();
+  setTimeout(()=>{
+    state.pending=false;
+    computePool();state.rotation=mod(state.rotation,TAU);
+    drawWheel();renderHistory();updateStatus();syncFinished();
+  },1000);
+}
+
+function hubReset(){hub.classList.remove('win');hubText.textContent='SPIN';hub.disabled=false;}
+
+/* ---- UI更新 ---- */
+function updateStatus(){
+  const total=targetTotal();
+  $('remain').textContent=Math.max(0,total-state.drawn.length);
+  $('total').textContent=total;
+  $('doneCount').textContent=state.drawn.length;
+  $('excCount').textContent=[...state.excluded].filter(n=>n>=state.min&&n<=state.max).length;
+  hub.disabled=state.spinning||state.pending||pool.length===0;
+  $('undo').disabled=state.drawn.length===0;
+  $('clearExc').disabled=state.excluded.size===0;
+}
+function syncFinished(){
+  const fin=$('finished'), total=targetTotal();
+  if(pool.length===0){
+    fin.classList.remove('hidden');
+    if(total>0){$('finTitle').textContent='すべての番号を抽選しました';$('finBtn').textContent='はじめから';$('finBtn').dataset.mode='reset';}
+    else{$('finTitle').textContent='抽選できる番号がありません';$('finBtn').textContent='設定を変更';$('finBtn').dataset.mode='settings';}
+  }else fin.classList.add('hidden');
+}
+function renderHistory(){
+  const box=$('history');box.innerHTML='';
+  if(!state.drawn.length){box.innerHTML='<span class="empty">まだありません</span>';return;}
+  state.drawn.forEach((n,i)=>{
+    const s=document.createElement('span');s.className='chip hist';
+    s.innerHTML='<i>'+(i+1)+'</i>'+n;box.appendChild(s);
+  });
+  box.scrollTop=box.scrollHeight;
+}
+function renderExcChips(){
+  const box=$('excChips');box.innerHTML='';
+  const arr=[...state.excluded].sort((a,b)=>a-b);
+  if(!arr.length){box.innerHTML='<span class="empty">なし</span>';return;}
+  for(const n of arr){
+    const b=document.createElement('button');b.className='chip exc';b.title='クリックで除外解除';
+    if(n<state.min||n>state.max)b.classList.add('out');
+    b.innerHTML='<span>'+n+'</span><span class="x">✕</span>';
+    b.onclick=()=>{state.excluded.delete(n);computePool();drawWheel();renderExcChips();updateStatus();syncFinished();};
+    box.appendChild(b);
+  }
+}
+let toastT;
+function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2200);}
+
+/* ---- 入力 ---- */
+function parseTokens(str){
+  const out=[];
+  for(const t of String(str).split(/[,、\s]+/)){
+    if(!t)continue;
+    const m=t.match(/^(\d+)\s*[-~〜–—]\s*(\d+)$/);
+    if(m){let lo=+m[1],hi=+m[2];if(lo>hi)[lo,hi]=[hi,lo];
+      if(hi-lo>=400){toast('範囲指定が広すぎます');continue;}
+      for(let n=lo;n<=hi;n++)out.push(n);
+    }else if(/^\d+$/.test(t))out.push(+t);
+    else toast('「'+t+'」は読み取れませんでした');
+  }
+  return out;
+}
+function addExcluded(){
+  const inp=$('excInput'), nums=parseTokens(inp.value);
+  if(!nums.length)return;
+  let added=0;nums.forEach(n=>{if(state.excluded.add(n))added++;});
+  inp.value='';
+  computePool();drawWheel();renderExcChips();updateStatus();syncFinished();
+  toast(added?added+'件を除外しました':'すでに除外済みです');
+}
+$('addExc').onclick=addExcluded;
+$('excInput').addEventListener('keydown',e=>{if(e.key==='Enter')addExcluded();});
+$('clearExc').onclick=()=>{state.excluded.clear();computePool();drawWheel();renderExcChips();updateStatus();syncFinished();toast('欠番をクリアしました');};
+
+$('applyRange').onclick=()=>{
+  const a=parseInt($('minN').value,10), b=parseInt($('maxN').value,10);
+  if(isNaN(a)||isNaN(b)){toast('数値を入力してください');return;}
+  if(a>b){toast('開始番号が終了番号より大きいです');return;}
+  if(b-a+1>400){toast('番号は最大400個までです');return;}
+  if(a===state.min&&b===state.max){toast('範囲は変更されていません');return;}
+  state.min=a;state.max=b;state.drawn=[];
+  hubReset();computePool();drawWheel();renderHistory();renderExcChips();updateStatus();syncFinished();
+  toast(a+'〜'+b+' に設定しました');
+};
+
+$('undo').onclick=()=>{
+  if(!state.drawn.length)return;
+  const n=state.drawn.pop();
+  computePool();drawWheel();renderHistory();updateStatus();syncFinished();
+  toast('「'+n+'」を戻しました');
+};
+function resetAll(){state.drawn=[];hubReset();computePool();drawWheel();renderHistory();updateStatus();syncFinished();toast('履歴をリセットしました');}
+$('reset').onclick=resetAll;
+$('finBtn').onclick=e=>{
+  if(e.target.dataset.mode==='reset')resetAll();
+  else{$('finished').classList.add('hidden');$('minN').focus();}
+};
+hub.onclick=spin;
+$('soundBtn').onclick=function(){
+  state.sound=!state.sound;
+  this.textContent=state.sound?'音:入':'音:切';
+  if(state.sound)ac();
+};
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&!state.spinning){
+    const t=document.activeElement;
+    if(t&&(t.tagName==='INPUT'||t.tagName==='BUTTON'))return;
+    e.preventDefault();spin();
+  }
+});
+
+/* ---- 起動 ---- */
+sizeCanvas();computePool();drawWheel();renderExcChips();renderHistory();updateStatus();syncFinished();
+})();
+</script>
+</body>
+</html>
