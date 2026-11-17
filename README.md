@@ -1,4 +1,4 @@
 # suzukiiiiiiiiiiii.github.io
 
-## インチキゴミルーレット
+
 
